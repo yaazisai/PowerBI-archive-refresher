@@ -7,14 +7,14 @@
 #Use this command to loginto power bi : Login-PowerBI
 
 #Change these parameters
-$startdate = "2024-05-03" #The current date of start.
+$startdate = "2024-08-15" #The current date of start.
 $monthscount = 32 #No of months in past from start date
 $workspaceid = "0ba3d58a-65bf-4b80-8c0f-55a5247c6cff"
 $datasetid = "ed662f22-b27d-4c24-86a7-635647779d86"
-$tableName="fWeeklySales"
-$sleepseconds = 200 #sleep time between each check
-$maxsleepcycle = 10 #No if cycles to check
-$parallelrefresh=3
+$tableName="fWeeklySales","fWeeklySales HFB"
+$sleepseconds = 100 #sleep time between each check
+$maxsleepcycle = 15 #No if cycles to check
+$parallelrefresh=4
 
 
 #Don't change anything beyond this unless you know what you are doing
@@ -22,10 +22,13 @@ $url = "groups/$workspaceid/datasets/$datasetid/refreshes"
 $startdate = [datetime]::parseexact($startdate, "yyyy-MM-dd", $null)
 $iteration_date = $startdate
 $monthscountpending=$monthscount
+
+Write-Host "Refreshing $tableName in "$datasetid 
+
 for ($i = 0; $i -lt $monthscount; $i = $i+$parallelrefresh) {
-  Write-Host "-------------------------"
   $objs=@()
   $partname=@()
+  $pendingcounter=0
   for ($j=0;($j -lt $parallelrefresh) -and ($j -lt $monthscountpending); $j++)
   {
     $y = $iteration_date.ToString("yyyy")
@@ -33,14 +36,19 @@ for ($i = 0; $i -lt $monthscount; $i = $i+$parallelrefresh) {
     $q = [Math]::ceiling($m / 3)
     $partitionname = $y + "Q" + $q + $m
     $iteration_date = $iteration_date.AddMonths(-1)
+    ForEach($tName in $tableName)
+    {
     $objs += @{
-      table=$tableName
+      table=$tName
       partition=$partitionname
     }
+    }
     $partname += $partitionname
-    $monthscountpending--
+    $pendingcounter++
+    
 
   }
+  $monthscountpending = $monthscountpending-$pendingcounter
   $payload=@{
     type='full'
     commitMode='transactional'
@@ -53,24 +61,30 @@ for ($i = 0; $i -lt $monthscount; $i = $i+$parallelrefresh) {
   Invoke-PowerBIRestMethod -Url $url -Method Post -Body $payload_final
   Write-Host "Triggering refresh for partitions "$partinfo
   $totalsleep = 0
+  $refstart = Get-Date
+  Write-Host "Refresh started at "$refstart
   do {
     $res = Invoke-PowerBIRestMethod -Url $url'?$top=1' -Method Get | ConvertFrom-JSON
-    Write-Host "Status of partition $partinfo :"$res.value.status
     $continue = 0
     if ($res.value.status -ne "Completed") {
-      Write-Host "Sleeping for $sleepseconds seconds"
+      Write-Host -NoNewLine "."
+      #Write-Host "Sleeping for $sleepseconds seconds"
       $sleepstart = Get-Date
-      Write-Host "Sleep started at $sleepstart. Sleeping for $sleepseconds"
+      #Write-Host "Sleep started at $sleepstart. Sleeping for $sleepseconds"
       Start-Sleep -Seconds $sleepseconds
       $sleepend = Get-Date
-      Write-Host "waking up "$sleepend
+      #Write-Host "waking up "$sleepend
       $totalsleep += ($sleepend - $sleepstart).Seconds
       if ($totalsleep -le $sleepseconds * $maxsleepcycle) {
         $continue = 1
       }
       else {
-        exit
+      exit
       }
+    }
+    else {
+      $refend = Get-Date
+      Write-Host "Refresh Completed at "$refend
     }
   } while ($continue -eq 1)
 
