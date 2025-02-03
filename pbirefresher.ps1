@@ -7,8 +7,8 @@
 #Use this command to loginto power bi : Login-PowerBI
 
 #Change these parameters
-$startdate = "2024-08-15" #The current date of start.
-$monthscount = 32 #No of months in past from start date
+$startdate = "2025-01-13" #The current date of start.
+$monthscount = 4 #No of months in past from start date
 $workspaceid = "0ba3d58a-65bf-4b80-8c0f-55a5247c6cff"
 $datasetid = "ed662f22-b27d-4c24-86a7-635647779d86"
 $tableName="fWeeklySales","fWeeklySales HFB"
